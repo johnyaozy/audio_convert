@@ -5,7 +5,7 @@
 功能：调用FFmpeg，将指定文件夹中指定格式的音频文件转换为目标格式
 用法：python audio_convert.py <输入文件夹> <源格式> <目标格式> [输出文件夹]
 示例：python audio_convert.py ./audio wav mp3
-      python audio_convert.py ./audio flac mp3 ./output -b 192k
+          python audio_convert.py ./audio flac mp3 ./output -b 192k
 """
 
 import os
@@ -70,8 +70,16 @@ def convert_audio(
     # 查找匹配的文件
     pattern = f"**/*.{src_format}" if recursive else f"*.{src_format}"
     files = sorted(input_path.glob(pattern))
-    # 排除已转换的文件（避免二次运行时重复处理）
-    files = [f for f in files if output_path.resolve() not in f.resolve().parents]
+    # 排除"输出目录中已存在同名目标格式文件"，避免二次运行时重复处理。
+    # 注意：不再按"目录包含关系"排除——否则当输入目录 == 输出目录（原地转换）时，
+    # 所有源文件的父目录都等于输出目录，会被全部误杀，导致报"未找到源文件"。
+    def _expected_out(f: Path) -> Path:
+        p = output_path / f"{f.stem}.{dst_format}"
+        if recursive and f.parent != input_path:
+            p = output_path / f.parent.relative_to(input_path) / f"{f.stem}.{dst_format}"
+        return p
+
+    files = [f for f in files if not _expected_out(f).exists()]
 
     if not files:
         print(f"⚠️  未找到 .{src_format} 格式的文件（目录: {input_path}）")
